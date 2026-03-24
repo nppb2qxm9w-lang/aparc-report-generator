@@ -477,14 +477,35 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-900">
       <div className="mx-auto max-w-6xl px-4 pb-28 pt-4 sm:px-6 sm:pt-6">
-        <div className="mb-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200 sm:p-6">
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            APaRC Report Generator
-          </h1>
-          <p className="mt-2 text-sm text-zinc-600">
-            Manual complaint item numbering, complaint snapshots at the top of each item, and inspection photos below each item.
-          </p>
+        <div className="mb-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200">
+  <div className="bg-blue-900 px-4 py-5 text-white sm:px-6">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <div className="text-2xl font-bold tracking-tight sm:text-3xl">
+          Australian Plumbing & Roofing Consultants
         </div>
+        <div className="mt-1 text-sm font-medium text-blue-100 sm:text-base">
+          Roofing & Plumbing Inspection Report System
+        </div>
+      </div>
+
+      <div className="text-sm text-blue-100 sm:text-right">
+        <div>QBCC Licence 715699</div>
+        <div>admin@auparc.com.au</div>
+        <div>auparc.com.au</div>
+      </div>
+    </div>
+  </div>
+
+  <div className="border-t border-blue-800 bg-blue-50 px-4 py-3 sm:px-6">
+    <div className="text-sm font-semibold uppercase tracking-wide text-blue-900">
+      APaRC Report Generator
+    </div>
+    <div className="mt-1 text-sm text-zinc-700">
+      Complaint-based field inspection workflow with snapshots, photos, and export options.
+    </div>
+  </div>
+</div>
 
         <section className="mb-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200 sm:p-6">
           <h2 className="mb-3 text-lg font-semibold">Job Details</h2>
