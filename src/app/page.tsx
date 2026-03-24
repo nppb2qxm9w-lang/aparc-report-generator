@@ -8,23 +8,26 @@ type PhotoItem = {
   dataUrl: string;
 };
 
-type Item = {
-  title: string;
-  concernArea: string;
+type ComplaintItem = {
+  itemNumber: string;
+  dateNoticed: string;
+  location: string;
+  description: string;
+  complaintSnapshot: PhotoItem | null;
   notes: string;
   areaAbove: string;
   likelyCause: string;
   testingMethod: string;
   testingResult: string;
   conclusionNotes: string;
-  photos: PhotoItem[];
+  inspectionPhotos: PhotoItem[];
 };
 
 type JobData = {
   propertyAddress: string;
   clientName: string;
   inspectionDate: string;
-  items: Item[];
+  complaintItems: ComplaintItem[];
 };
 
 function uid() {
@@ -120,17 +123,20 @@ function buildConclusion(conclusionNotes: string) {
   return `Based on the above, ${ensureFullStop(conc).replace(/^[A-Z]/, (m) => m.toLowerCase())}`;
 }
 
-function blankItem(): Item {
+function blankComplaintItem(): ComplaintItem {
   return {
-    title: "",
-    concernArea: "",
+    itemNumber: "",
+    dateNoticed: "",
+    location: "",
+    description: "",
+    complaintSnapshot: null,
     notes: "",
     areaAbove: "",
     likelyCause: "",
     testingMethod: "",
     testingResult: "",
     conclusionNotes: "",
-    photos: [],
+    inspectionPhotos: [],
   };
 }
 
@@ -163,27 +169,42 @@ export default function Home() {
   const [propertyAddress, setPropertyAddress] = useState("");
   const [clientName, setClientName] = useState("");
   const [inspectionDate, setInspectionDate] = useState("");
-  const [items, setItems] = useState<Item[]>([blankItem()]);
+  const [complaintItems, setComplaintItems] = useState<ComplaintItem[]>([blankComplaintItem()]);
   const [showPreview, setShowPreview] = useState(false);
   const importRef = useRef<HTMLInputElement | null>(null);
 
-  const addItem = () => {
-    setItems((prev) => [...prev, blankItem()]);
+  const addComplaintItem = () => {
+    setComplaintItems((prev) => [...prev, blankComplaintItem()]);
   };
 
-  const removeItem = (index: number) => {
-    setItems((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
+  const removeComplaintItem = (index: number) => {
+    setComplaintItems((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
   };
 
-  const updateItem = (index: number, field: keyof Item, value: string) => {
-    setItems((prev) => {
+  const updateComplaintItem = (
+    index: number,
+    field: keyof ComplaintItem,
+    value: string | PhotoItem | null | PhotoItem[]
+  ) => {
+    setComplaintItems((prev) => {
       const next = [...prev];
-      next[index] = { ...next[index], [field]: value };
+      next[index] = { ...next[index], [field]: value } as ComplaintItem;
       return next;
     });
   };
 
-  const addPhotos = async (index: number, files: FileList | null) => {
+  const addComplaintSnapshot = async (index: number, file: File | null) => {
+    if (!file) return;
+    const dataUrl = await fileToDataUrl(file);
+
+    updateComplaintItem(index, "complaintSnapshot", {
+      id: uid(),
+      name: file.name,
+      dataUrl,
+    });
+  };
+
+  const addInspectionPhotos = async (index: number, files: FileList | null) => {
     if (!files || files.length === 0) return;
 
     const newPhotos: PhotoItem[] = [];
@@ -196,33 +217,37 @@ export default function Home() {
       });
     }
 
-    setItems((prev) => {
+    setComplaintItems((prev) => {
       const next = [...prev];
       next[index] = {
         ...next[index],
-        photos: [...next[index].photos, ...newPhotos],
+        inspectionPhotos: [...next[index].inspectionPhotos, ...newPhotos],
       };
       return next;
     });
   };
 
-  const removePhoto = (itemIndex: number, photoId: string) => {
-    setItems((prev) => {
+  const removeInspectionPhoto = (itemIndex: number, photoId: string) => {
+    setComplaintItems((prev) => {
       const next = [...prev];
       next[itemIndex] = {
         ...next[itemIndex],
-        photos: next[itemIndex].photos.filter((p) => p.id !== photoId),
+        inspectionPhotos: next[itemIndex].inspectionPhotos.filter((p) => p.id !== photoId),
       };
       return next;
     });
   };
 
   const builtItems = useMemo(() => {
-    return items.map((item, index) => {
-      const concern = cleanSentence(item.concernArea);
-      const concernSentence = concern
-        ? `The owner directed us to the area of concern at ${ensureFullStop(concern).replace(/^[A-Z]/, (m) => m.toLowerCase())}`
-        : "The owner directed us to the area of concern.";
+    return complaintItems.map((item, index) => {
+      const itemLabel = item.itemNumber ? item.itemNumber : `${index + 1}`;
+      const location = cleanSentence(item.location);
+      const description = cleanSentence(item.description);
+
+      const concernSentence =
+        location || description
+          ? `The owner directed us to the area of concern at ${location || "the reported location"}${description ? ` where ${ensureFullStop(description).replace(/^[A-Z]/, (m) => m.toLowerCase())}` : "."}`
+          : "The owner directed us to the area of concern.";
 
       const observation = buildObservation(item.notes);
       const alignment = buildAlignment(item.areaAbove, item.notes);
@@ -235,7 +260,11 @@ export default function Home() {
 
       return {
         index,
-        title: item.title,
+        itemLabel,
+        dateNoticed: item.dateNoticed,
+        location: item.location,
+        description: item.description,
+        complaintSnapshot: item.complaintSnapshot,
         concernSentence,
         observation,
         alignment,
@@ -243,10 +272,10 @@ export default function Home() {
         testingSentence,
         resultSentence,
         conclusion,
-        photos: item.photos,
+        inspectionPhotos: item.inspectionPhotos,
       };
     });
-  }, [items]);
+  }, [complaintItems]);
 
   const generatedReport = useMemo(() => {
     const header = [
@@ -259,10 +288,15 @@ export default function Home() {
     ].join("\n");
 
     const body = builtItems
-      .map((item) => {
-        return [
-          `COMPLAINT ITEM ${item.index + 1}${item.title ? ` – ${item.title}` : ""}`,
+      .map((item) =>
+        [
+          `COMPLAINT ITEM ${item.itemLabel}`,
+          item.dateNoticed ? `Date noticed: ${item.dateNoticed}` : "",
+          item.location ? `Location: ${item.location}` : "",
+          item.description ? `Complaint description: ${item.description}` : "",
           "",
+          item.complaintSnapshot ? "[Complaint snapshot inserted below this item heading]" : "",
+          item.complaintSnapshot ? "" : "",
           item.concernSentence,
           "",
           item.observation,
@@ -277,16 +311,17 @@ export default function Home() {
           "",
           item.conclusion,
           "",
-          item.photos.length
-            ? `Photos attached: ${item.photos.map((_, i) => `Photo ${i + 1}`).join(", ")}`
+          item.inspectionPhotos.length ? "Photos below show the area of concern." : "",
+          item.inspectionPhotos.length
+            ? item.inspectionPhotos.map((_, i) => `Inspection Photo ${i + 1}`).join(", ")
             : "",
-          item.photos.length ? "" : "",
+          "",
           "---",
           "",
         ]
           .filter(Boolean)
-          .join("\n");
-      })
+          .join("\n")
+      )
       .join("\n");
 
     return header + body;
@@ -297,9 +332,9 @@ export default function Home() {
       propertyAddress,
       clientName,
       inspectionDate,
-      items,
+      complaintItems,
     }),
-    [propertyAddress, clientName, inspectionDate, items]
+    [propertyAddress, clientName, inspectionDate, complaintItems]
   );
 
   const saveJobJson = () => {
@@ -318,14 +353,15 @@ export default function Home() {
     setPropertyAddress(data.propertyAddress || "");
     setClientName(data.clientName || "");
     setInspectionDate(data.inspectionDate || "");
-    setItems(
-      Array.isArray(data.items) && data.items.length
-        ? data.items.map((item) => ({
-            ...blankItem(),
+    setComplaintItems(
+      Array.isArray(data.complaintItems) && data.complaintItems.length
+        ? data.complaintItems.map((item) => ({
+            ...blankComplaintItem(),
             ...item,
-            photos: Array.isArray(item.photos) ? item.photos : [],
+            complaintSnapshot: item.complaintSnapshot || null,
+            inspectionPhotos: Array.isArray(item.inspectionPhotos) ? item.inspectionPhotos : [],
           }))
-        : [blankItem()]
+        : [blankComplaintItem()]
     );
   };
 
@@ -338,24 +374,37 @@ export default function Home() {
   const buildWordHtml = () => {
     const htmlItems = builtItems
       .map((item) => {
-        const photosHtml = item.photos.length
+        const snapshotHtml = item.complaintSnapshot
           ? `
-            <h3>Photos</h3>
-            ${item.photos
+            <div style="margin:12px 0 16px 0;">
+              <div style="font-weight:bold; margin-bottom:6px;">Complaint Snapshot</div>
+              <img src="${item.complaintSnapshot.dataUrl}" style="max-width:100%; height:auto; border:1px solid #ccc;" />
+            </div>
+          `
+          : "";
+
+        const photosHtml = item.inspectionPhotos.length
+          ? `
+            <p><strong>Photos below show the area of concern.</strong></p>
+            ${item.inspectionPhotos
               .map(
                 (p, i) => `
-              <div style="margin-bottom:16px;">
-                <div style="font-weight:bold; margin-bottom:6px;">Photo ${i + 1}</div>
-                <img src="${p.dataUrl}" style="max-width:100%; height:auto; border:1px solid #ccc;" />
-              </div>
-            `
+                  <div style="margin-bottom:16px;">
+                    <div style="font-weight:bold; margin-bottom:6px;">Inspection Photo ${i + 1}</div>
+                    <img src="${p.dataUrl}" style="max-width:100%; height:auto; border:1px solid #ccc;" />
+                  </div>
+                `
               )
               .join("")}
           `
           : "";
 
         return `
-          <h2>COMPLAINT ITEM ${item.index + 1}${item.title ? ` – ${escapeHtml(item.title)}` : ""}</h2>
+          <h2>COMPLAINT ITEM ${escapeHtml(item.itemLabel)}</h2>
+          ${item.dateNoticed ? `<p><strong>Date noticed:</strong> ${escapeHtml(item.dateNoticed)}</p>` : ""}
+          ${item.location ? `<p><strong>Location:</strong> ${escapeHtml(item.location)}</p>` : ""}
+          ${item.description ? `<p><strong>Complaint description:</strong> ${escapeHtml(item.description)}</p>` : ""}
+          ${snapshotHtml}
           <p>${escapeHtml(item.concernSentence)}</p>
           <p>${escapeHtml(item.observation)}</p>
           <p>${escapeHtml(item.alignment)}</p>
@@ -427,13 +476,13 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-900">
-      <div className="mx-auto max-w-5xl px-4 pb-28 pt-4 sm:px-6 sm:pt-6">
+      <div className="mx-auto max-w-6xl px-4 pb-28 pt-4 sm:px-6 sm:pt-6">
         <div className="mb-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200 sm:p-6">
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
             APaRC Report Generator
           </h1>
           <p className="mt-2 text-sm text-zinc-600">
-            Save jobs to Files/iCloud, export to PDF or Word, and attach multiple photos to each complaint item.
+            Manual complaint item numbering, complaint snapshots at the top of each item, and inspection photos below each item.
           </p>
         </div>
 
@@ -507,23 +556,20 @@ export default function Home() {
             className="hidden"
             onChange={(e) => importJobJson(e.target.files?.[0] || null)}
           />
-
-          <p className="mt-3 text-sm text-zinc-600">
-            On iPhone, use the share/download prompt and choose <strong>Save to Files</strong>, then pick
-            <strong> iCloud Drive</strong> or <strong>On My iPhone</strong>.
-          </p>
         </section>
 
         <div className="space-y-4">
-          {items.map((item, index) => (
+          {complaintItems.map((item, index) => (
             <section
               key={index}
               className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200 sm:p-6"
             >
               <div className="mb-3 flex items-center justify-between gap-3">
-                <h2 className="text-lg font-semibold">Complaint Item {index + 1}</h2>
+                <h2 className="text-lg font-semibold">
+                  Complaint Item {item.itemNumber || index + 1}
+                </h2>
                 <button
-                  onClick={() => removeItem(index)}
+                  onClick={() => removeComplaintItem(index)}
                   className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-900"
                 >
                   Remove
@@ -532,69 +578,113 @@ export default function Home() {
 
               <div className="grid gap-3">
                 <input
-                  value={item.title}
-                  onChange={(e) => updateItem(index, "title", e.target.value)}
-                  placeholder="Item title"
+                  value={item.itemNumber}
+                  onChange={(e) => updateComplaintItem(index, "itemNumber", e.target.value)}
+                  placeholder="Manual item number"
                   className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base outline-none focus:border-zinc-500"
                 />
                 <input
-                  value={item.concernArea}
-                  onChange={(e) => updateItem(index, "concernArea", e.target.value)}
-                  placeholder="Area of concern"
+                  type="date"
+                  value={item.dateNoticed}
+                  onChange={(e) => updateComplaintItem(index, "dateNoticed", e.target.value)}
+                  className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base outline-none focus:border-zinc-500"
+                />
+                <input
+                  value={item.location}
+                  onChange={(e) => updateComplaintItem(index, "location", e.target.value)}
+                  placeholder="Item location"
                   className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base outline-none focus:border-zinc-500"
                 />
                 <textarea
+                  value={item.description}
+                  onChange={(e) => updateComplaintItem(index, "description", e.target.value)}
+                  placeholder="Item description / complaint wording"
+                  rows={3}
+                  className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base outline-none focus:border-zinc-500"
+                />
+
+                <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                  <div className="mb-2 text-sm font-semibold">Complaint Snapshot</div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => addComplaintSnapshot(index, e.target.files?.[0] || null)}
+                    className="block w-full text-sm"
+                  />
+
+                  {item.complaintSnapshot && (
+                    <div className="mt-3 rounded-xl border border-zinc-200 bg-white p-2">
+                      <img
+                        src={item.complaintSnapshot.dataUrl}
+                        alt={item.complaintSnapshot.name}
+                        className="w-full rounded-lg object-contain"
+                      />
+                      <div className="mt-2 truncate text-xs text-zinc-600">
+                        {item.complaintSnapshot.name}
+                      </div>
+                      <button
+                        onClick={() => updateComplaintItem(index, "complaintSnapshot", null)}
+                        className="mt-2 w-full rounded-lg border border-zinc-300 px-2 py-2 text-xs font-semibold"
+                      >
+                        Remove Complaint Snapshot
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <textarea
                   value={item.notes}
-                  onChange={(e) => updateItem(index, "notes", e.target.value)}
-                  placeholder="Rough site notes. One point per line works best."
+                  onChange={(e) => updateComplaintItem(index, "notes", e.target.value)}
+                  placeholder="Site notes. One point per line works best."
                   rows={6}
                   className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base outline-none focus:border-zinc-500"
                 />
                 <input
                   value={item.areaAbove}
-                  onChange={(e) => updateItem(index, "areaAbove", e.target.value)}
+                  onChange={(e) => updateComplaintItem(index, "areaAbove", e.target.value)}
                   placeholder="Area above / corresponding external area"
                   className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base outline-none focus:border-zinc-500"
                 />
                 <input
                   value={item.likelyCause}
-                  onChange={(e) => updateItem(index, "likelyCause", e.target.value)}
+                  onChange={(e) => updateComplaintItem(index, "likelyCause", e.target.value)}
                   placeholder="Likely mechanism or cause"
                   className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base outline-none focus:border-zinc-500"
                 />
                 <input
                   value={item.testingMethod}
-                  onChange={(e) => updateItem(index, "testingMethod", e.target.value)}
+                  onChange={(e) => updateComplaintItem(index, "testingMethod", e.target.value)}
                   placeholder="Testing method"
                   className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base outline-none focus:border-zinc-500"
                 />
                 <input
                   value={item.testingResult}
-                  onChange={(e) => updateItem(index, "testingResult", e.target.value)}
+                  onChange={(e) => updateComplaintItem(index, "testingResult", e.target.value)}
                   placeholder="Testing result"
                   className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base outline-none focus:border-zinc-500"
                 />
                 <textarea
                   value={item.conclusionNotes}
-                  onChange={(e) => updateItem(index, "conclusionNotes", e.target.value)}
+                  onChange={(e) => updateComplaintItem(index, "conclusionNotes", e.target.value)}
                   placeholder="Conclusion wording to reflect"
                   rows={4}
                   className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base outline-none focus:border-zinc-500"
                 />
 
                 <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-                  <div className="mb-2 text-sm font-semibold">Photos for this item</div>
+                  <div className="mb-2 text-sm font-semibold">Inspection Photos</div>
                   <input
                     type="file"
                     accept="image/*"
                     multiple
-                    onChange={(e) => addPhotos(index, e.target.files)}
+                    capture="environment"
+                    onChange={(e) => addInspectionPhotos(index, e.target.files)}
                     className="block w-full text-sm"
                   />
 
-                  {item.photos.length > 0 && (
+                  {item.inspectionPhotos.length > 0 && (
                     <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                      {item.photos.map((photo) => (
+                      {item.inspectionPhotos.map((photo) => (
                         <div key={photo.id} className="rounded-xl border border-zinc-200 bg-white p-2">
                           <img
                             src={photo.dataUrl}
@@ -603,7 +693,7 @@ export default function Home() {
                           />
                           <div className="mt-2 truncate text-xs text-zinc-600">{photo.name}</div>
                           <button
-                            onClick={() => removePhoto(index, photo.id)}
+                            onClick={() => removeInspectionPhoto(index, photo.id)}
                             className="mt-2 w-full rounded-lg border border-zinc-300 px-2 py-2 text-xs font-semibold"
                           >
                             Remove Photo
@@ -620,7 +710,7 @@ export default function Home() {
 
         <div className="mt-4 flex flex-col gap-3 sm:flex-row">
           <button
-            onClick={addItem}
+            onClick={addComplaintItem}
             className="w-full rounded-xl bg-zinc-900 px-4 py-3 text-base font-semibold text-white sm:w-auto"
           >
             Add Complaint Item
@@ -640,12 +730,53 @@ export default function Home() {
             <pre className="whitespace-pre-wrap break-words rounded-xl bg-zinc-50 p-4 text-sm leading-6 text-zinc-800">
               {generatedReport}
             </pre>
+
+            {builtItems.map((item) => (
+              <div key={item.index} className="mt-6 rounded-xl border border-zinc-200 p-4">
+                <h3 className="mb-3 text-base font-semibold">
+                  Complaint Item {item.itemLabel}
+                </h3>
+
+                {item.complaintSnapshot && (
+                  <div className="mb-4">
+                    <div className="mb-2 text-sm font-semibold">Complaint Snapshot</div>
+                    <img
+                      src={item.complaintSnapshot.dataUrl}
+                      alt={item.complaintSnapshot.name}
+                      className="w-full rounded-lg border border-zinc-200"
+                    />
+                  </div>
+                )}
+
+                {item.inspectionPhotos.length > 0 && (
+                  <div>
+                    <div className="mb-2 text-sm font-semibold">
+                      Photos below show the area of concern
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      {item.inspectionPhotos.map((photo, i) => (
+                        <div key={photo.id}>
+                          <img
+                            src={photo.dataUrl}
+                            alt={photo.name}
+                            className="w-full rounded-lg border border-zinc-200"
+                          />
+                          <div className="mt-1 text-xs text-zinc-600">
+                            Inspection Photo {i + 1}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
           </section>
         )}
       </div>
 
       <div className="fixed inset-x-0 bottom-0 border-t border-zinc-200 bg-white/95 p-3 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl gap-3">
+        <div className="mx-auto flex max-w-6xl gap-3">
           <button
             onClick={() => setShowPreview(false)}
             className="flex-1 rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base font-semibold text-zinc-900"
