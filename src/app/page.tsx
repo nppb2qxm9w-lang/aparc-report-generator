@@ -6,6 +6,7 @@ type PhotoItem = {
   id: string;
   name: string;
   dataUrl: string;
+  notes: string;
 };
 
 type ComplaintItem = {
@@ -165,6 +166,23 @@ function escapeHtml(input: string) {
     .replaceAll(">", "&gt;");
 }
 
+function photoNotesHtml(text: string) {
+  return `
+    <div style="
+      border: 1px solid #999;
+      min-height: 54px;
+      padding: 8px;
+      margin-top: 6px;
+      font-size: 12px;
+      line-height: 1.4;
+      background: #fff;
+      white-space: pre-wrap;
+    ">
+      ${escapeHtml(text || "Photo notation:")}
+    </div>
+  `;
+}
+
 export default function Home() {
   const [propertyAddress, setPropertyAddress] = useState("");
   const [clientName, setClientName] = useState("");
@@ -201,6 +219,23 @@ export default function Home() {
       id: uid(),
       name: file.name,
       dataUrl,
+      notes: "",
+    });
+  };
+
+  const updateComplaintSnapshotNotes = (index: number, value: string) => {
+    setComplaintItems((prev) => {
+      const next = [...prev];
+      if (!next[index].complaintSnapshot) return prev;
+
+      next[index] = {
+        ...next[index],
+        complaintSnapshot: {
+          ...next[index].complaintSnapshot!,
+          notes: value,
+        },
+      };
+      return next;
     });
   };
 
@@ -214,6 +249,7 @@ export default function Home() {
         id: uid(),
         name: file.name,
         dataUrl,
+        notes: "",
       });
     }
 
@@ -222,6 +258,23 @@ export default function Home() {
       next[index] = {
         ...next[index],
         inspectionPhotos: [...next[index].inspectionPhotos, ...newPhotos],
+      };
+      return next;
+    });
+  };
+
+  const updateInspectionPhotoNotes = (
+    itemIndex: number,
+    photoId: string,
+    value: string
+  ) => {
+    setComplaintItems((prev) => {
+      const next = [...prev];
+      next[itemIndex] = {
+        ...next[itemIndex],
+        inspectionPhotos: next[itemIndex].inspectionPhotos.map((photo) =>
+          photo.id === photoId ? { ...photo, notes: value } : photo
+        ),
       };
       return next;
     });
@@ -376,9 +429,21 @@ export default function Home() {
       .map((item) => {
         const snapshotHtml = item.complaintSnapshot
           ? `
-            <div style="margin:12px 0 16px 0;">
+            <div style="margin:12px 0 18px 0;">
               <div style="font-weight:bold; margin-bottom:6px;">Complaint Snapshot</div>
-              <img src="${item.complaintSnapshot.dataUrl}" style="max-width:100%; height:auto; border:1px solid #ccc;" />
+              <img
+                src="${item.complaintSnapshot.dataUrl}"
+                style="
+                  display:block;
+                  width:100%;
+                  max-width:100%;
+                  height:auto;
+                  max-height:260px;
+                  object-fit:contain;
+                  border:1px solid #ccc;
+                "
+              />
+              ${photoNotesHtml(item.complaintSnapshot.notes)}
             </div>
           `
           : "";
@@ -386,34 +451,54 @@ export default function Home() {
         const photosHtml = item.inspectionPhotos.length
           ? `
             <p><strong>Photos below show the area of concern.</strong></p>
-            ${item.inspectionPhotos
-              .map(
-                (p, i) => `
-                  <div style="margin-bottom:16px;">
-                    <div style="font-weight:bold; margin-bottom:6px;">Inspection Photo ${i + 1}</div>
-                    <img src="${p.dataUrl}" style="max-width:100%; height:auto; border:1px solid #ccc;" />
-                  </div>
-                `
-              )
-              .join("")}
+            <div style="
+              display:grid;
+              grid-template-columns: 1fr 1fr;
+              gap:16px;
+              align-items:start;
+              margin-top:10px;
+            ">
+              ${item.inspectionPhotos
+                .map(
+                  (p, i) => `
+                    <div style="break-inside:avoid;">
+                      <div style="font-weight:bold; margin-bottom:6px;">Inspection Photo ${i + 1}</div>
+                      <img
+                        src="${p.dataUrl}"
+                        style="
+                          display:block;
+                          width:100%;
+                          height:180px;
+                          object-fit:cover;
+                          border:1px solid #ccc;
+                        "
+                      />
+                      ${photoNotesHtml(p.notes)}
+                    </div>
+                  `
+                )
+                .join("")}
+            </div>
           `
           : "";
 
         return `
-          <h2>COMPLAINT ITEM ${escapeHtml(item.itemLabel)}</h2>
-          ${item.dateNoticed ? `<p><strong>Date noticed:</strong> ${escapeHtml(item.dateNoticed)}</p>` : ""}
-          ${item.location ? `<p><strong>Location:</strong> ${escapeHtml(item.location)}</p>` : ""}
-          ${item.description ? `<p><strong>Complaint description:</strong> ${escapeHtml(item.description)}</p>` : ""}
-          ${snapshotHtml}
-          <p>${escapeHtml(item.concernSentence)}</p>
-          <p>${escapeHtml(item.observation)}</p>
-          <p>${escapeHtml(item.alignment)}</p>
-          <p>${escapeHtml(item.mechanism)}</p>
-          <p>${escapeHtml(item.testingSentence)}</p>
-          <p>${escapeHtml(item.resultSentence)}</p>
-          <p>${escapeHtml(item.conclusion)}</p>
-          ${photosHtml}
-          <hr />
+          <div style="margin-bottom:24px;">
+            <h2>COMPLAINT ITEM ${escapeHtml(item.itemLabel)}</h2>
+            ${item.dateNoticed ? `<p><strong>Date noticed:</strong> ${escapeHtml(item.dateNoticed)}</p>` : ""}
+            ${item.location ? `<p><strong>Location:</strong> ${escapeHtml(item.location)}</p>` : ""}
+            ${item.description ? `<p><strong>Complaint description:</strong> ${escapeHtml(item.description)}</p>` : ""}
+            ${snapshotHtml}
+            <p>${escapeHtml(item.concernSentence)}</p>
+            <p>${escapeHtml(item.observation)}</p>
+            <p>${escapeHtml(item.alignment)}</p>
+            <p>${escapeHtml(item.mechanism)}</p>
+            <p>${escapeHtml(item.testingSentence)}</p>
+            <p>${escapeHtml(item.resultSentence)}</p>
+            <p>${escapeHtml(item.conclusion)}</p>
+            ${photosHtml}
+            <hr />
+          </div>
         `;
       })
       .join("");
@@ -423,8 +508,24 @@ export default function Home() {
         <head>
           <meta charset="utf-8" />
           <title>APaRC Report</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              padding: 24px;
+              line-height: 1.45;
+              color: #171717;
+            }
+            * {
+              box-sizing: border-box;
+            }
+            @media print {
+              body {
+                padding: 18mm 14mm;
+              }
+            }
+          </style>
         </head>
-        <body style="font-family: Arial, sans-serif; padding: 24px; line-height: 1.45;">
+        <body>
           <h1>APaRC Report</h1>
           <p><strong>PROPERTY:</strong> ${escapeHtml(propertyAddress)}</p>
           <p><strong>CLIENT:</strong> ${escapeHtml(clientName)}</p>
@@ -644,6 +745,13 @@ export default function Home() {
                       <div className="mt-2 truncate text-xs text-zinc-600">
                         {item.complaintSnapshot.name}
                       </div>
+                      <textarea
+                        value={item.complaintSnapshot.notes}
+                        onChange={(e) => updateComplaintSnapshotNotes(index, e.target.value)}
+                        placeholder="Complaint snapshot notation"
+                        rows={3}
+                        className="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-zinc-500"
+                      />
                       <button
                         onClick={() => updateComplaintItem(index, "complaintSnapshot", null)}
                         className="mt-2 w-full rounded-lg border border-zinc-300 px-2 py-2 text-xs font-semibold"
@@ -705,15 +813,24 @@ export default function Home() {
                   />
 
                   {item.inspectionPhotos.length > 0 && (
-                    <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                       {item.inspectionPhotos.map((photo) => (
                         <div key={photo.id} className="rounded-xl border border-zinc-200 bg-white p-2">
                           <img
                             src={photo.dataUrl}
                             alt={photo.name}
-                            className="h-28 w-full rounded-lg object-cover"
+                            className="h-40 w-full rounded-lg object-cover"
                           />
                           <div className="mt-2 truncate text-xs text-zinc-600">{photo.name}</div>
+                          <textarea
+                            value={photo.notes}
+                            onChange={(e) =>
+                              updateInspectionPhotoNotes(index, photo.id, e.target.value)
+                            }
+                            placeholder="Inspection photo notation"
+                            rows={3}
+                            className="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-zinc-500"
+                          />
                           <button
                             onClick={() => removeInspectionPhoto(index, photo.id)}
                             className="mt-2 w-full rounded-lg border border-zinc-300 px-2 py-2 text-xs font-semibold"
@@ -767,6 +884,9 @@ export default function Home() {
                       alt={item.complaintSnapshot.name}
                       className="w-full rounded-lg border border-zinc-200"
                     />
+                    <div className="mt-2 rounded-lg border border-zinc-300 bg-white p-3 text-sm whitespace-pre-wrap">
+                      {item.complaintSnapshot.notes || "Complaint snapshot notation"}
+                    </div>
                   </div>
                 )}
 
@@ -775,16 +895,19 @@ export default function Home() {
                     <div className="mb-2 text-sm font-semibold">
                       Photos below show the area of concern
                     </div>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       {item.inspectionPhotos.map((photo, i) => (
                         <div key={photo.id}>
                           <img
                             src={photo.dataUrl}
                             alt={photo.name}
-                            className="w-full rounded-lg border border-zinc-200"
+                            className="h-40 w-full rounded-lg border border-zinc-200 object-cover"
                           />
                           <div className="mt-1 text-xs text-zinc-600">
                             Inspection Photo {i + 1}
+                          </div>
+                          <div className="mt-2 rounded-lg border border-zinc-300 bg-white p-3 text-sm whitespace-pre-wrap">
+                            {photo.notes || "Inspection photo notation"}
                           </div>
                         </div>
                       ))}
